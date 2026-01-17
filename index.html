@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Match Intelligence & Prediction System</title>
+    
+    <!-- Google Fonts: Poppins -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Poppins', 'sans-serif'],
+                    },
+                    colors: {
+                        primary: '#2563EB',
+                        success: '#16A34A',
+                        error: '#DC2626',
+                        background: '#F5F7FB',
+                    },
+                    boxShadow: {
+                        'glow': '0 0 15px rgba(37, 99, 235, 0.3)',
+                        'card': '0 4px 20px -2px rgba(0, 0, 0, 0.05)',
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body { background-color: #F5F7FB; }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #2563EB;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        .fade-in {
+            animation: fadeIn 0.4s ease-out forwards;
+            opacity: 0;
+            transform: translateY(10px);
+        }
+        @keyframes fadeIn { to { opacity: 1; transform: translateY(0); } }
+
+        .nav-gradient { background: linear-gradient(135deg, #0F172A, #020617); }
+        .btn-gradient { background: linear-gradient(135deg, #2563EB, #3B82F6); }
+        .btn-gradient:hover { background: linear-gradient(135deg, #1D4ED8, #2563EB); }
+        
+        .cell-win { background: linear-gradient(135deg, #DCFCE7, #BBF7D0); color: #166534; }
+        .cell-loss { background: linear-gradient(135deg, #FEE2E2, #FECACA); color: #991B1B; }
+        
+        /* New Over/Under 2.5 Classes */
+        .goals-over { background: linear-gradient(135deg, #DCFCE7, #BBF7D0); color: #166534; font-weight: 700; border-radius: 6px; }
+        .goals-under { background: linear-gradient(135deg, #FEE2E2, #FECACA); color: #991B1B; font-weight: 700; border-radius: 6px; }
+
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+        }
+
+        #scroll-top-btn {
+            transition: all 0.3s ease;
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(20px);
+        }
+        #scroll-top-btn.visible { opacity: 1; visibility: visible; transform: translateY(0); }
+    </style>
+</head>
+<body class="text-slate-800 antialiased min-h-screen flex flex-col font-sans">
+
+    <nav class="nav-gradient text-white sticky top-0 z-40 shadow-xl border-b border-slate-800/50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-20">
+                <div class="flex items-center gap-3">
+                    <div class="bg-blue-600/20 p-2 rounded-lg backdrop-blur-sm">
+                        <i class="fa-solid fa-chart-line text-blue-400 text-xl"></i>
+                    </div>
+                    <span class="font-bold text-2xl tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-400">Match Intelligence</span>
+                </div>
+                <div class="flex space-x-6 text-[15px] font-medium">
+                    <button onclick="switchTab('all')" id="tab-all" class="relative px-5 py-2.5 rounded-full transition-all duration-300 hover:text-white group">
+                        <span>All Matches</span>
+                    </button>
+                    <button onclick="switchTab('sureMatches')" id="tab-sureMatches" class="relative px-5 py-2.5 rounded-full transition-all duration-300 text-slate-400 hover:text-white group">
+                        <i class="fa-solid fa-circle-check text-xs mr-1 opacity-70"></i> 
+                        <span>Sure Matches</span>
+                    </button>
+                    <button onclick="switchTab('sureGoals')" id="tab-sureGoals" class="relative px-5 py-2.5 rounded-full transition-all duration-300 text-slate-400 hover:text-white group">
+                        <i class="fa-solid fa-bullseye text-xs mr-1 opacity-70"></i>
+                        <span>Sure Goals</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="flex-grow container mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-8">
+
+        <div id="loading-indicator" class="flex flex-col items-center justify-center h-64">
+            <div class="loader mb-4"></div>
+            <p class="text-slate-500 font-medium animate-pulse">Analyzing Match Data...</p>
+        </div>
+
+        <div id="error-message" class="hidden bg-red-50 border-l-4 border-red-500 p-4 mb-6 rounded-lg shadow-sm">
+            <div class="flex">
+                <div class="flex-shrink-0"><i class="fa-solid fa-circle-exclamation text-red-500"></i></div>
+                <div class="ml-3"><p class="text-sm text-red-700 font-medium" id="error-text">Error loading data.</p></div>
+            </div>
+        </div>
+
+        <div id="dashboard-content" class="hidden space-y-8">
+            <!-- Stats -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="bg-white rounded-2xl shadow-card p-6 border border-slate-100 hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1 relative overflow-hidden group">
+                    <div class="absolute right-0 top-0 h-full w-1.5 bg-blue-500/80"></div>
+                    <div class="flex justify-between items-start relative z-10">
+                        <div><p class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Total Matches</p><h3 class="text-4xl font-bold text-slate-800" id="stat-total">0</h3></div>
+                        <div class="p-3 bg-blue-50 rounded-xl text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-all duration-300 shadow-sm"><i class="fa-solid fa-list text-xl"></i></div>
+                    </div>
+                </div>
+                <div class="bg-white rounded-2xl shadow-card p-6 border border-slate-100 hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1 relative overflow-hidden group">
+                    <div class="absolute right-0 top-0 h-full w-1.5 bg-green-500/80"></div>
+                    <div class="flex justify-between items-start relative z-10">
+                        <div><p class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Matches Won</p><h3 class="text-4xl font-bold text-slate-800" id="stat-won">0</h3></div>
+                        <div class="p-3 bg-green-50 rounded-xl text-green-600 group-hover:bg-green-600 group-hover:text-white transition-all duration-300 shadow-sm"><i class="fa-solid fa-check text-xl"></i></div>
+                    </div>
+                </div>
+                <div class="bg-white rounded-2xl shadow-card p-6 border border-slate-100 hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1 relative overflow-hidden group">
+                    <div class="absolute right-0 top-0 h-full w-1.5 bg-indigo-500/80"></div>
+                    <div class="flex justify-between items-start relative z-10">
+                        <div><p class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Win Rate</p><h3 class="text-4xl font-bold text-slate-800" id="stat-rate">0%</h3></div>
+                        <div class="p-3 bg-indigo-50 rounded-xl text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-all duration-300 shadow-sm"><i class="fa-solid fa-percent text-xl"></i></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Control Panel -->
+            <div class="glass-panel rounded-2xl shadow-card overflow-hidden">
+                <button onclick="toggleFilters()" class="w-full flex justify-between items-center p-5 bg-white/50 hover:bg-white transition-colors border-b border-slate-100">
+                    <div class="flex items-center gap-3 text-slate-800 font-bold text-lg">
+                        <div class="bg-blue-100 p-1.5 rounded-md text-blue-600"><i class="fa-solid fa-sliders"></i></div>
+                        Control Panel & Filters
+                    </div>
+                    <i id="filter-chevron" class="fa-solid fa-chevron-down text-slate-400 transition-transform duration-300 bg-slate-100 p-2 rounded-full h-8 w-8 flex items-center justify-center"></i>
+                </button>
+                
+                <div id="filter-panel" class="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 hidden bg-white/80">
+                    <div class="space-y-1.5">
+                        <label class="block text-xs font-bold text-slate-500 uppercase tracking-wide">Match Date</label>
+                        <select id="filter-date" class="w-full bg-slate-50 border-slate-200 rounded-lg shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm py-2.5 px-3 border transition-all">
+                            <option value="">All Dates</option>
+                        </select>
+                    </div>
+                    <div class="space-y-1.5">
+                        <label class="block text-xs font-bold text-slate-500 uppercase tracking-wide">Prediction</label>
+                        <select id="filter-prediction" class="w-full bg-slate-50 border-slate-200 rounded-lg shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm py-2.5 px-3 border transition-all">
+                            <option value="">All</option>
+                            <option value="1">Home Win (1)</option>
+                            <option value="X">Draw (X)</option>
+                            <option value="2">Away Win (2)</option>
+                        </select>
+                    </div>
+                    <div class="space-y-1.5">
+                        <label class="block text-xs font-bold text-slate-500 uppercase tracking-wide">Sure Tip? (Dynamic)</label>
+                        <select id="filter-sure-tip" class="w-full bg-slate-50 border-slate-200 rounded-lg shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm py-2.5 px-3 border transition-all">
+                            <option value="">Any</option>
+                        </select>
+                    </div>
+                    <div class="space-y-1.5">
+                        <label class="block text-xs font-bold text-slate-500 uppercase tracking-wide">Sure Goals? (Dynamic)</label>
+                        <select id="filter-sure-goals" class="w-full bg-slate-50 border-slate-200 rounded-lg shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm py-2.5 px-3 border transition-all">
+                            <option value="">Any</option>
+                        </select>
+                    </div>
+
+                    <div class="col-span-1 md:col-span-2 lg:col-span-4 flex justify-end gap-4 mt-4 pt-4 border-t border-slate-100">
+                        <button onclick="resetFilters()" class="px-6 py-2.5 text-sm font-semibold text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-all active:scale-95">Reset</button>
+                        <button onclick="applyFilters()" class="px-8 py-2.5 text-sm font-bold text-white btn-gradient rounded-lg shadow-md hover:scale-105 active:scale-95 transition-all flex items-center gap-2"><i class="fa-solid fa-filter"></i> Apply Filters</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Table -->
+            <div class="bg-white rounded-2xl shadow-card border border-slate-200/60 overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-slate-100">
+                        <thead>
+                            <tr class="bg-[#E8EEF8]">
+                                <th class="px-6 py-4 text-left text-[13px] font-bold text-slate-600 uppercase">Action</th>
+                                <th class="px-6 py-4 text-left text-[13px] font-bold text-slate-600 uppercase">Date</th>
+                                <th class="px-6 py-4 text-left text-[13px] font-bold text-slate-600 uppercase">Teams</th>
+                                <th class="px-6 py-4 text-center text-[13px] font-bold text-slate-600 uppercase">PPG (H/A)</th>
+                                <th class="px-6 py-4 text-center text-[13px] font-bold text-slate-600 uppercase">Pred</th>
+                                <th class="px-6 py-4 text-center text-[13px] font-bold text-slate-600 uppercase">Prob %</th>
+                                <th class="px-6 py-4 text-center text-[13px] font-bold text-slate-600 uppercase">Goals</th>
+                                <th class="px-6 py-4 text-center text-[13px] font-bold text-slate-600 uppercase">Tags</th>
+                                <th class="px-6 py-4 text-center text-[13px] font-bold text-slate-600 uppercase">Result</th>
+                            </tr>
+                        </thead>
+                        <tbody id="matches-table-body" class="bg-white divide-y divide-slate-50"></tbody>
+                    </table>
+                </div>
+                
+                <div class="bg-white px-6 py-4 flex items-center justify-between border-t border-slate-100">
+                    <p class="text-sm text-slate-600">Showing <span class="font-bold" id="page-range">0-0</span> of <span class="font-bold" id="page-total">0</span></p>
+                    <div class="inline-flex rounded-lg shadow-sm -space-x-px">
+                        <button onclick="changePage(-1)" id="btn-prev" class="px-3 py-2 rounded-l-lg border border-slate-200 bg-white text-sm font-medium hover:bg-slate-50 transition-colors"><i class="fa-solid fa-chevron-left"></i></button>
+                        <button onclick="changePage(1)" id="btn-next" class="px-3 py-2 rounded-r-lg border border-slate-200 bg-white text-sm font-medium hover:bg-slate-50 transition-colors"><i class="fa-solid fa-chevron-right"></i></button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <button id="scroll-top-btn" onclick="scrollToTop()" class="fixed bottom-8 right-8 bg-blue-600 text-white p-4 rounded-full shadow-lg hover:bg-blue-700 hover:-translate-y-1 transition-all z-50">
+        <i class="fa-solid fa-arrow-up"></i>
+    </button>
+
+    <!-- Analysis Modal -->
+    <div id="match-modal" class="fixed inset-0 z-50 hidden overflow-y-auto">
+        <div class="flex items-center justify-center min-h-screen px-4">
+            <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onclick="closeModal()"></div>
+            <div class="bg-white rounded-2xl text-left overflow-hidden shadow-2xl transform transition-all sm:max-w-4xl w-full z-10 p-8">
+                <div class="flex justify-between items-center mb-6 border-b pb-4">
+                    <h3 class="text-xl font-bold text-slate-900">Analysis & Statistics</h3>
+                    <button onclick="closeModal()" class="text-slate-400 hover:text-red-500 bg-slate-50 p-2 rounded-full"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <div id="modal-content" class="space-y-6"></div>
+                <div class="mt-8 flex justify-end"><button onclick="closeModal()" class="px-6 py-2.5 bg-slate-800 text-white rounded-lg hover:bg-slate-900">Close</button></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQUFYbJHX1H0BMS-u0JphKwvbvCKsA-HftlURRflFkEncYCbZAZJ98BwBFy3vYcIuo7EQXROWO9JNlA/pub?gid=1019987394&single=true&output=csv';
+        const ROWS_PER_PAGE = 20;
+
+        let rawData = [];
+        let filteredData = [];
+        let currentTab = 'all';
+        let currentPage = 1;
+
+        const KEY_MAP = {
+            date: "Match Date",
+            homeTeam: "Home Team",
+            awayTeam: "Away Team",
+            homePPG: "Home PPG",
+            awayPPG: "Away PPG",
+            prediction: "Prediction",
+            prob: "Probability %",
+            totalGoals: "Total Goals",
+            sureTip: "Sure Tip?",
+            sureGoals: "Sure Goals?",
+            result: "Match Result",
+            homeLeaguePos: "Home League Pos",
+            awayLeaguePos: "Away League Pos",
+            homeGames: "Home Games Played",
+            awayGames: "Away Games Played",
+            homeWinPct: "Home Win %",
+            awayWinPct: "Away Win %"
+        };
+
+        document.addEventListener('DOMContentLoaded', () => {
+            fetchData();
+            window.addEventListener('scroll', () => {
+                const btn = document.getElementById('scroll-top-btn');
+                btn.classList.toggle('visible', window.scrollY > 300);
+            });
+        });
+
+        async function fetchData() {
+            try {
+                const response = await fetch(SHEET_CSV_URL);
+                const csvText = await response.text();
+                rawData = parseCSV(csvText);
+                
+                populateDynamicFilters();
+                applyFilters();
+
+                document.getElementById('loading-indicator').classList.add('hidden');
+                document.getElementById('dashboard-content').classList.remove('hidden');
+                switchTab('all');
+            } catch (error) {
+                document.getElementById('loading-indicator').classList.add('hidden');
+                document.getElementById('error-message').classList.remove('hidden');
+            }
+        }
+
+        function parseCSV(text) {
+            const lines = text.split('\n').filter(l => l.trim() !== '');
+            const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+            const result = [];
+            
+            for (let i = 1; i < lines.length; i++) {
+                let row = [], inQuote = false, token = '';
+                for (let char of lines[i]) {
+                    if (char === '"') inQuote = !inQuote;
+                    else if (char === ',' && !inQuote) { row.push(token); token = ''; }
+                    else token += char;
+                }
+                row.push(token);
+
+                if (row.length === headers.length) {
+                    const obj = {};
+                    headers.forEach((h, idx) => obj[h] = (row[idx] || '').trim());
+                    obj._id = i;
+                    obj._status = getWinStatus(obj[KEY_MAP.prediction], obj[KEY_MAP.result]);
+                    result.push(obj);
+                }
+            }
+            return result;
+        }
+
+        function getWinStatus(pred, res) {
+            if (!res || res === '-') return 'pending';
+            const parts = res.split(/[-–]/);
+            if (parts.length !== 2) return 'pending';
+            const h = parseInt(parts[0]), a = parseInt(parts[1]);
+            const actual = h > a ? '1' : (a > h ? '2' : 'X');
+            const p = pred.toString().toUpperCase();
+            const normP = p.includes('HOME') || p === '1' ? '1' : (p.includes('AWAY') || p === '2' ? '2' : 'X');
+            return actual === normP ? 'won' : 'lost';
+        }
+
+        function populateDynamicFilters() {
+            const getUnique = (key) => [...new Set(rawData.map(i => i[key]))].filter(v => v).sort();
+            
+            const fill = (id, values) => {
+                const el = document.getElementById(id);
+                values.forEach(v => {
+                    const opt = document.createElement('option');
+                    opt.value = v; opt.innerText = v;
+                    el.appendChild(opt);
+                });
+            };
+
+            fill('filter-date', getUnique(KEY_MAP.date));
+            fill('filter-sure-tip', getUnique(KEY_MAP.sureTip));
+            fill('filter-sure-goals', getUnique(KEY_MAP.sureGoals));
+        }
+
+        function switchTab(tab) {
+            currentTab = tab;
+            ['all', 'sureMatches', 'sureGoals'].forEach(t => {
+                const btn = document.getElementById(`tab-${t}`);
+                const active = t === tab;
+                btn.className = active 
+                    ? 'relative px-5 py-2.5 rounded-full transition-all bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-lg shadow-blue-500/30'
+                    : 'relative px-5 py-2.5 rounded-full transition-all text-slate-400 hover:text-white';
+            });
+
+            // Auto-filter based on tab
+            const sureTipEl = document.getElementById('filter-sure-tip');
+            const sureGoalEl = document.getElementById('filter-sure-goals');
+
+            if (tab === 'sureMatches') {
+                sureTipEl.value = Array.from(sureTipEl.options).find(o => o.value.toLowerCase().includes('yes'))?.value || '';
+                sureGoalEl.value = '';
+            } else if (tab === 'sureGoals') {
+                sureTipEl.value = '';
+                sureGoalEl.value = Array.from(sureGoalEl.options).find(o => o.value.toLowerCase().includes('yes'))?.value || '';
+            } else {
+                sureTipEl.value = '';
+                sureGoalEl.value = '';
+            }
+
+            applyFilters();
+        }
+
+        function applyFilters() {
+            const fDate = document.getElementById('filter-date').value;
+            const fPred = document.getElementById('filter-prediction').value;
+            const fTip = document.getElementById('filter-sure-tip').value;
+            const fGoal = document.getElementById('filter-sure-goals').value;
+
+            filteredData = rawData.filter(i => {
+                if (fDate && i[KEY_MAP.date] !== fDate) return false;
+                if (fTip && i[KEY_MAP.sureTip] !== fTip) return false;
+                if (fGoal && i[KEY_MAP.sureGoals] !== fGoal) return false;
+                if (fPred) {
+                    const p = i[KEY_MAP.prediction].toString().toUpperCase();
+                    if (fPred === '1' && !(p === '1' || p.includes('HOME'))) return false;
+                    if (fPred === '2' && !(p === '2' || p.includes('AWAY'))) return false;
+                    if (fPred === 'X' && !(p === 'X' || p.includes('DRAW'))) return false;
+                }
+                return true;
+            });
+
+            currentPage = 1;
+            renderStats();
+            renderTable();
+        }
+
+        function renderStats() {
+            const total = filteredData.length;
+            const finished = filteredData.filter(d => d._status !== 'pending');
+            const won = finished.filter(d => d._status === 'won').length;
+            const rate = finished.length > 0 ? (won / finished.length * 100).toFixed(1) : 0;
+
+            document.getElementById('stat-total').innerText = total;
+            document.getElementById('stat-won').innerText = won;
+            document.getElementById('stat-rate').innerText = rate + '%';
+        }
+
+        function renderTable() {
+            const tbody = document.getElementById('matches-table-body');
+            tbody.innerHTML = '';
+
+            const start = (currentPage - 1) * ROWS_PER_PAGE;
+            const pageData = filteredData.slice(start, start + ROWS_PER_PAGE);
+
+            pageData.forEach((row, idx) => {
+                const tr = document.createElement('tr');
+                tr.className = 'fade-in hover:bg-[#F0F6FF] transition-all';
+                tr.style.animationDelay = `${idx * 30}ms`;
+
+                // Logic for Goal Color Coding (requested for Sure Goals tab)
+                let goalsClass = 'text-slate-600 font-semibold';
+                if (currentTab === 'sureGoals' && row[KEY_MAP.result] && row[KEY_MAP.result] !== '-') {
+                    const scores = row[KEY_MAP.result].split(/[-–]/);
+                    if (scores.length === 2) {
+                        const sum = parseInt(scores[0]) + parseInt(scores[1]);
+                        goalsClass = (sum > 2.5) ? 'goals-over' : 'goals-under';
+                    }
+                }
+
+                const team1Class = row._status === 'won' && (row[KEY_MAP.prediction].includes('1') || row[KEY_MAP.prediction].includes('Home')) ? 'cell-win px-2 rounded' : (row._status === 'lost' && (row[KEY_MAP.prediction].includes('1') || row[KEY_MAP.prediction].includes('Home')) ? 'cell-loss px-2 rounded' : '');
+                const team2Class = row._status === 'won' && (row[KEY_MAP.prediction].includes('2') || row[KEY_MAP.prediction].includes('Away')) ? 'cell-win px-2 rounded' : (row._status === 'lost' && (row[KEY_MAP.prediction].includes('2') || row[KEY_MAP.prediction].includes('Away')) ? 'cell-loss px-2 rounded' : '');
+
+                tr.innerHTML = `
+                    <td class="px-6 py-4"><button onclick="openModal(${row._id})" class="px-3 py-1 bg-blue-50 text-blue-600 rounded-full text-xs font-bold hover:bg-blue-600 hover:text-white transition-all">View</button></td>
+                    <td class="px-6 py-4 text-xs font-medium text-slate-500">${row[KEY_MAP.date]}</td>
+                    <td class="px-6 py-4">
+                        <div class="flex flex-col gap-1">
+                            <span class="${team1Class} text-sm font-bold text-slate-700">${row[KEY_MAP.homeTeam]}</span>
+                            <span class="${team2Class} text-sm font-bold text-slate-700">${row[KEY_MAP.awayTeam]}</span>
+                        </div>
+                    </td>
+                    <td class="px-6 py-4 text-center text-sm font-bold text-slate-500">${row[KEY_MAP.homePPG]} / ${row[KEY_MAP.awayPPG]}</td>
+                    <td class="px-6 py-4 text-center"><span class="px-2 py-1 bg-blue-50 text-blue-700 font-bold rounded text-xs">${row[KEY_MAP.prediction]}</span></td>
+                    <td class="px-6 py-4 text-center text-xs font-bold">${row[KEY_MAP.prob]}%</td>
+                    <td class="px-6 py-4 text-center"><div class="inline-block px-3 py-1 ${goalsClass}">${row[KEY_MAP.totalGoals]}</div></td>
+                    <td class="px-6 py-4 text-center">
+                        ${row[KEY_MAP.sureTip].toLowerCase().includes('yes') ? '<span class="text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-bold mr-1">TIP</span>' : ''}
+                        ${row[KEY_MAP.sureGoals].toLowerCase().includes('yes') ? '<span class="text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-bold">GOALS</span>' : ''}
+                    </td>
+                    <td class="px-6 py-4 text-center font-bold text-slate-900">${row[KEY_MAP.result] || '-'}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            const count = filteredData.length;
+            const end = Math.min(start + ROWS_PER_PAGE, count);
+            document.getElementById('page-range').innerText = `${count > 0 ? start + 1 : 0}-${end}`;
+            document.getElementById('page-total').innerText = count;
+            document.getElementById('btn-prev').disabled = currentPage === 1;
+            document.getElementById('btn-next').disabled = end >= count;
+        }
+
+        function toggleFilters() {
+            const p = document.getElementById('filter-panel');
+            p.classList.toggle('hidden');
+            document.getElementById('filter-chevron').classList.toggle('rotate-180');
+        }
+
+        function resetFilters() {
+            document.querySelectorAll('#filter-panel select').forEach(s => s.value = '');
+            switchTab('all');
+        }
+
+        function changePage(d) {
+            currentPage += d;
+            renderTable();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function openModal(id) {
+            const m = rawData.find(d => d._id === id);
+            const content = document.getElementById('modal-content');
+            content.innerHTML = `
+                <div class="grid grid-cols-2 gap-8 text-center bg-slate-50 p-6 rounded-xl border border-slate-100">
+                    <div><h4 class="text-xs uppercase font-bold text-slate-400 mb-1">Home</h4><p class="text-xl font-bold">${m[KEY_MAP.homeTeam]}</p><p class="text-sm font-medium text-blue-600">Pos: ${m[KEY_MAP.homeLeaguePos]}</p></div>
+                    <div><h4 class="text-xs uppercase font-bold text-slate-400 mb-1">Away</h4><p class="text-xl font-bold">${m[KEY_MAP.awayTeam]}</p><p class="text-sm font-medium text-blue-600">Pos: ${m[KEY_MAP.awayLeaguePos]}</p></div>
+                </div>
+                <div class="grid grid-cols-3 gap-4 text-center text-sm">
+                   <div class="p-3 bg-white border rounded-lg"> <span class="block text-xs font-bold text-slate-400 uppercase">Home Win %</span> <span class="text-lg font-bold">${m[KEY_MAP.homeWinPct]}%</span> </div>
+                   <div class="p-3 bg-white border rounded-lg"> <span class="block text-xs font-bold text-slate-400 uppercase">Away Win %</span> <span class="text-lg font-bold">${m[KEY_MAP.awayWinPct]}%</span> </div>
+                   <div class="p-3 bg-white border rounded-lg"> <span class="block text-xs font-bold text-slate-400 uppercase">Avg Goals</span> <span class="text-lg font-bold">${m[KEY_MAP.totalGoals]}</span> </div>
+                </div>
+            `;
+            document.getElementById('match-modal').classList.remove('hidden');
+        }
+
+        function closeModal() { document.getElementById('match-modal').classList.add('hidden'); }
+        function scrollToTop() { window.scrollTo({ top: 0, behavior: 'smooth' }); }
+    </script>
+</body>
+</html>
